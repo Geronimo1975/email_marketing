@@ -8,13 +8,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/campaigns/', include('apps.campaigns.urls')),
-    path('api/subscribers/', include('apps.subscribers.urls')),
-    path('api/analytics/', include('apps.analytics.urls')),
-    path('api/automation/', include('apps.automation.urls')),
-    path('api/accounts/', include('apps.accounts.urls')),
     path('webhooks/', include('apps.integrations.urls')),
-    path('', include(('apps.campaigns.urls', 'campaigns'), namespace='frontend')),
+    path('api/integrations/', include('apps.integrations.urls')),
 ]
 
 # Serve static and media files during development

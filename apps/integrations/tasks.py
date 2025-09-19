@@ -5,19 +5,21 @@ Celery tasks for integrations.
 import logging
 from celery import shared_task
 from django.utils import timezone
+from django.db.models import Sum
 from datetime import timedelta
 from typing import Dict, List
 
 from .models import Integration, SyncJob, WebhookLog
 from .services import MailgunService, OdooService
-from apps.subscribers.models import Subscriber, SubscriberList
+from apps.subscribers.models import EmailContact, EmailList
+from apps.analytics.models import EmailEvent, ContactActivity
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
-def sync_odoo_contacts(self, integration_id: int) -> Dict:
-    """Sync contacts from Odoo to subscriber lists."""
+def sync_odoo_contacts_task(self, integration_id: int) -> Dict:
+    """Sync contacts from Odoo to email contacts."""
     try:
         integration = Integration.objects.get(id=integration_id)
 
@@ -41,7 +43,7 @@ def sync_odoo_contacts(self, integration_id: int) -> Dict:
             )
 
             # Get contacts from Odoo
-            contact_ids = odoo_service.search_contacts()
+            contact_ids = odoo_service.search_contacts(limit=500)
             sync_job.total_records = len(contact_ids)
             sync_job.save()
 
@@ -57,37 +59,40 @@ def sync_odoo_contacts(self, integration_id: int) -> Dict:
                         if not email:
                             continue
 
-                        # Create or update subscriber
-                        subscriber, created = Subscriber.objects.get_or_create(
+                        name = contact.get('name', '')
+                        name_parts = name.split(' ') if name else []
+
+                        # Create or update email contact
+                        contact_obj, created = EmailContact.objects.get_or_create(
                             email=email,
                             defaults={
-                                'first_name': contact.get('name', '').split(' ')[0],
-                                'last_name': ' '.join(contact.get('name', '').split(' ')[1:]),
-                                'status': Subscriber.Status.SUBSCRIBED,
-                                'odoo_contact_id': contact.get('id'),
-                                'custom_fields': {
-                                    'phone': contact.get('phone', ''),
-                                    'mobile': contact.get('mobile', ''),
-                                    'city': contact.get('city', ''),
-                                    'country': contact.get('country_id', {}).get('name', '') if contact.get('country_id') else '',
-                                    'is_company': contact.get('is_company', False)
-                                }
+                                'first_name': name_parts[0] if name_parts else '',
+                                'last_name': ' '.join(name_parts[1:]) if len(name_parts) > 1 else '',
+                                'phone': contact.get('phone') or contact.get('mobile', ''),
+                                'company_name': name if contact.get('is_company') else '',
+                                'street_address': contact.get('street', ''),
+                                'city': contact.get('city', ''),
+                                'postal_code': contact.get('zip', ''),
+                                'country': contact.get('country_id', [None, ''])[1] if contact.get('country_id') else '',
+                                'source': EmailContact.ContactSource.ODOO_IMPORT,
+                                'odoo_id': contact.get('id'),
+                                'gdpr_consent': True,  # Assume consent from CRM
+                                'is_subscribed': True,
+                                'tags': contact.get('category_id', []),
                             }
                         )
 
                         if not created:
-                            # Update existing subscriber
-                            subscriber.odoo_contact_id = contact.get('id')
-                            subscriber.first_name = contact.get('name', '').split(' ')[0]
-                            subscriber.last_name = ' '.join(contact.get('name', '').split(' ')[1:])
-                            subscriber.custom_fields.update({
-                                'phone': contact.get('phone', ''),
-                                'mobile': contact.get('mobile', ''),
-                                'city': contact.get('city', ''),
-                                'country': contact.get('country_id', {}).get('name', '') if contact.get('country_id') else '',
-                                'is_company': contact.get('is_company', False)
-                            })
-                            subscriber.save()
+                            # Update existing contact
+                            contact_obj.first_name = name_parts[0] if name_parts else contact_obj.first_name
+                            contact_obj.last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else contact_obj.last_name
+                            contact_obj.phone = contact.get('phone') or contact.get('mobile') or contact_obj.phone
+                            contact_obj.street_address = contact.get('street', '') or contact_obj.street_address
+                            contact_obj.city = contact.get('city', '') or contact_obj.city
+                            contact_obj.postal_code = contact.get('zip', '') or contact_obj.postal_code
+                            contact_obj.country = (contact.get('country_id', [None, ''])[1] if contact.get('country_id') else '') or contact_obj.country
+                            contact_obj.odoo_id = contact.get('id')
+                            contact_obj.save()
 
                         sync_job.successful_records += 1
 
@@ -138,8 +143,8 @@ def sync_odoo_contacts(self, integration_id: int) -> Dict:
 
 
 @shared_task
-def sync_mailgun_suppressions() -> Dict:
-    """Sync Mailgun suppression lists with local subscriber status."""
+def update_suppression_lists_task() -> Dict:
+    """Sync Mailgun suppression lists with local contact status."""
     try:
         mailgun_service = MailgunService()
 
@@ -150,10 +155,9 @@ def sync_mailgun_suppressions() -> Dict:
         for bounce in bounces:
             email = bounce.get('address')
             if email:
-                Subscriber.objects.filter(
-                    email=email
-                ).update(
-                    status=Subscriber.Status.BOUNCED
+                EmailContact.objects.filter(email=email).update(
+                    is_bounced=True,
+                    bounce_count=1
                 )
                 bounced_count += 1
 
@@ -164,10 +168,9 @@ def sync_mailgun_suppressions() -> Dict:
         for unsubscribe in unsubscribes:
             email = unsubscribe.get('address')
             if email:
-                Subscriber.objects.filter(
-                    email=email
-                ).update(
-                    status=Subscriber.Status.UNSUBSCRIBED
+                EmailContact.objects.filter(email=email).update(
+                    is_subscribed=False,
+                    unsubscribed_at=timezone.now()
                 )
                 unsubscribed_count += 1
 
@@ -178,10 +181,9 @@ def sync_mailgun_suppressions() -> Dict:
         for complaint in complaints:
             email = complaint.get('address')
             if email:
-                Subscriber.objects.filter(
-                    email=email
-                ).update(
-                    status=Subscriber.Status.COMPLAINED
+                EmailContact.objects.filter(email=email).update(
+                    is_subscribed=False,
+                    complained_at=timezone.now()
                 )
                 complained_count += 1
 
@@ -198,7 +200,7 @@ def sync_mailgun_suppressions() -> Dict:
 
 
 @shared_task
-def cleanup_old_webhook_logs(days: int = 30) -> Dict:
+def cleanup_old_webhook_logs_task(days: int = 30) -> Dict:
     """Clean up old webhook logs."""
     try:
         cutoff_date = timezone.now() - timedelta(days=days)
@@ -218,19 +220,13 @@ def cleanup_old_webhook_logs(days: int = 30) -> Dict:
 
 
 @shared_task(bind=True, max_retries=3)
-def sync_subscriber_to_odoo(self, subscriber_id: int) -> Dict:
-    """Sync individual subscriber data to Odoo."""
+def sync_subscriber_to_odoo(self, contact_id: int) -> Dict:
+    """Sync individual email contact data to Odoo."""
     try:
-        subscriber = Subscriber.objects.get(id=subscriber_id)
+        contact = EmailContact.objects.get(id=contact_id)
 
-        # Get Odoo integration for subscriber's team
-        # (assuming subscriber belongs to first list's team)
-        if not subscriber.lists.exists():
-            return {'status': 'skipped', 'reason': 'No lists assigned'}
-
-        team = subscriber.lists.first().team
+        # Get Odoo integration
         integration = Integration.objects.filter(
-            team=team,
             provider=Integration.Provider.ODOO,
             status=Integration.Status.ACTIVE
         ).first()
@@ -249,29 +245,29 @@ def sync_subscriber_to_odoo(self, subscriber_id: int) -> Dict:
 
             # Prepare contact data
             contact_data = {
-                'name': subscriber.full_name,
-                'email': subscriber.email,
-                'phone': subscriber.custom_fields.get('phone', ''),
-                'mobile': subscriber.custom_fields.get('mobile', ''),
-                'street': subscriber.custom_fields.get('street', ''),
-                'city': subscriber.custom_fields.get('city', ''),
-                'zip': subscriber.custom_fields.get('zip', ''),
+                'name': f"{contact.first_name} {contact.last_name}".strip() or contact.company_name,
+                'email': contact.email,
+                'phone': contact.phone,
+                'street': contact.street_address,
+                'city': contact.city,
+                'zip': contact.postal_code,
+                'is_company': bool(contact.company_name and not contact.first_name)
             }
 
-            if subscriber.odoo_contact_id:
+            if contact.odoo_id:
                 # Update existing contact
                 success = odoo_service.update_contact(
-                    subscriber.odoo_contact_id, contact_data
+                    contact.odoo_id, contact_data
                 )
                 if success:
-                    return {'status': 'updated', 'odoo_id': subscriber.odoo_contact_id}
+                    return {'status': 'updated', 'odoo_id': contact.odoo_id}
                 else:
                     return {'status': 'error', 'message': 'Update failed'}
             else:
                 # Create new contact
                 odoo_id = odoo_service.create_contact(contact_data)
-                subscriber.odoo_contact_id = odoo_id
-                subscriber.save()
+                contact.odoo_id = odoo_id
+                contact.save()
                 return {'status': 'created', 'odoo_id': odoo_id}
 
         except Exception as e:
@@ -281,65 +277,63 @@ def sync_subscriber_to_odoo(self, subscriber_id: int) -> Dict:
             raise
 
     except Exception as e:
-        logger.error(f"Error syncing subscriber to Odoo: {e}")
+        logger.error(f"Error syncing contact to Odoo: {e}")
         raise self.retry(countdown=60 * (self.request.retries + 1))
 
 
 @shared_task
-def export_engagement_to_odoo() -> Dict:
+def export_engagement_to_odoo_task() -> Dict:
     """Export email engagement data to Odoo custom fields."""
     try:
-        from apps.analytics.models import SubscriberActivity
+        # Get contacts with Odoo IDs and recent activity
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        contacts = EmailContact.objects.filter(
+            odoo_id__isnull=False,
+            last_email_activity__gte=thirty_days_ago
+        )
 
-        # Get all subscriber activities
-        activities = SubscriberActivity.objects.select_related('subscriber').all()
+        # Get Odoo integration
+        integration = Integration.objects.filter(
+            provider=Integration.Provider.ODOO,
+            status=Integration.Status.ACTIVE
+        ).first()
+
+        if not integration:
+            return {'status': 'skipped', 'reason': 'No Odoo integration'}
+
+        credentials = integration.decrypt_credentials()
+        odoo_service = OdooService(
+            url=credentials.get('url'),
+            username=credentials.get('username'),
+            api_key=credentials.get('api_key'),
+            database=credentials.get('database')
+        )
 
         updated_count = 0
         error_count = 0
 
-        for activity in activities:
-            subscriber = activity.subscriber
-
-            if not subscriber.odoo_contact_id:
-                continue
-
-            # Get Odoo integration for subscriber
-            if not subscriber.lists.exists():
-                continue
-
-            team = subscriber.lists.first().team
-            integration = Integration.objects.filter(
-                team=team,
-                provider=Integration.Provider.ODOO,
-                status=Integration.Status.ACTIVE
-            ).first()
-
-            if not integration:
-                continue
-
+        for contact in contacts:
             try:
-                credentials = integration.decrypt_credentials()
-                odoo_service = OdooService(
-                    url=credentials.get('url'),
-                    username=credentials.get('username'),
-                    api_key=credentials.get('api_key'),
-                    database=credentials.get('database')
+                # Calculate engagement metrics
+                recent_events = EmailEvent.objects.filter(
+                    recipient__contact=contact,
+                    timestamp__gte=thirty_days_ago
                 )
 
                 engagement_data = {
-                    'engagement_score': activity.engagement_score,
-                    'emails_opened': activity.emails_opened,
-                    'emails_clicked': activity.emails_clicked,
-                    'last_opened': activity.last_opened.isoformat() if activity.last_opened else None
+                    'engagement_score': contact.engagement_score,
+                    'emails_opened': recent_events.filter(event_type=EmailEvent.EventType.OPENED).count(),
+                    'emails_clicked': recent_events.filter(event_type=EmailEvent.EventType.CLICKED).count(),
+                    'last_opened': contact.last_engagement.isoformat() if contact.last_engagement else None,
                 }
 
                 odoo_service.sync_email_engagement(
-                    subscriber.odoo_contact_id, engagement_data
+                    contact.odoo_id, engagement_data
                 )
                 updated_count += 1
 
             except Exception as e:
-                logger.error(f"Error updating engagement for subscriber {subscriber.id}: {e}")
+                logger.error(f"Error updating engagement for contact {contact.id}: {e}")
                 error_count += 1
 
         return {
@@ -351,3 +345,16 @@ def export_engagement_to_odoo() -> Dict:
     except Exception as e:
         logger.error(f"Error exporting engagement data: {e}")
         return {'status': 'error', 'message': str(e)}
+
+# Backwards-compatibility wrappers expected by tests
+@shared_task(bind=True, max_retries=3)
+def sync_odoo_contacts(self, integration_id: int) -> Dict:
+    return sync_odoo_contacts_task(self, integration_id)
+
+@shared_task
+def sync_mailgun_suppressions() -> Dict:
+    return update_suppression_lists_task()
+
+@shared_task
+def cleanup_old_webhook_logs(days: int = 30) -> Dict:
+    return cleanup_old_webhook_logs_task(days)

@@ -119,10 +119,21 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Internationalization
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+LANGUAGE_CODE = 'de'
+TIME_ZONE = 'Europe/Berlin'
 USE_I18N = True
+USE_L10N = True
 USE_TZ = True
+
+# Languages
+LANGUAGES = [
+    ('de', 'Deutsch'),
+    ('en', 'English'),
+]
+
+LOCALE_PATHS = [
+    BASE_DIR / 'locale',
+]
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
@@ -187,6 +198,7 @@ MAILGUN_WEBHOOK_SIGNING_KEY = env('MAILGUN_WEBHOOK_SIGNING_KEY', default='')
 ODOO_URL = env('ODOO_URL', default='')
 ODOO_USERNAME = env('ODOO_USERNAME', default='')
 ODOO_API_KEY = env('ODOO_API_KEY', default='')
+ODOO_DATABASE = env('ODOO_DATABASE', default='odoo')
 
 # Logging Configuration
 LOGGING = {

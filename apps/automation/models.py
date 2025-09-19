@@ -188,7 +188,7 @@ class WorkflowSubscriber(models.Model):
         related_name='workflow_subscribers'
     )
     subscriber = models.ForeignKey(
-        'subscribers.Subscriber',
+        'subscribers.EmailContact',
         on_delete=models.CASCADE,
         related_name='workflow_subscriptions'
     )

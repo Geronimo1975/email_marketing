@@ -9,7 +9,7 @@ import json
 from typing import Dict, List, Optional, Any
 from django.conf import settings
 from django.utils import timezone
-from django.core.exceptions import ValidationError
+# from django.core.exceptions import ValidationError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,8 +26,13 @@ class MailgunService:
         if not self.api_key or not self.domain:
             raise ValueError("Mailgun API key and domain must be configured")
 
-    def _make_request(self, method: str, endpoint: str, data: Dict = None,
-                     files: Dict = None) -> Dict:
+    def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        data: Dict = None,
+        files: Dict = None,
+    ) -> Dict:
         """Make authenticated request to Mailgun API."""
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         auth = ('api', self.api_key)
@@ -39,7 +44,7 @@ class MailgunService:
                 auth=auth,
                 data=data,
                 files=files,
-                timeout=30
+                timeout=30,
             )
             response.raise_for_status()
             return response.json()
@@ -47,11 +52,19 @@ class MailgunService:
             logger.error(f"Mailgun API error: {e}")
             raise
 
-    def send_email(self, to_email: str, subject: str, html_content: str,
-                   text_content: str = None, from_email: str = None,
-                   from_name: str = None, tags: List[str] = None,
-                   custom_vars: Dict = None, track_opens: bool = True,
-                   track_clicks: bool = True) -> Dict:
+    def send_email(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        text_content: str = None,
+        from_email: str = None,
+        from_name: str = None,
+        tags: List[str] = None,
+        custom_vars: Dict = None,
+        track_opens: bool = True,
+        track_clicks: bool = True,
+    ) -> Dict:
         """Send individual email via Mailgun."""
 
         from_address = from_email or f"noreply@{self.domain}"
@@ -82,11 +95,18 @@ class MailgunService:
 
         return self._make_request('POST', 'messages', data=data)
 
-    def send_bulk_email(self, recipients: List[Dict], subject: str,
-                       html_content: str, text_content: str = None,
-                       from_email: str = None, from_name: str = None,
-                       tags: List[str] = None, track_opens: bool = True,
-                       track_clicks: bool = True) -> Dict:
+    def send_bulk_email(
+        self,
+        recipients: List[Dict],
+        subject: str,
+        html_content: str,
+        text_content: str = None,
+        from_email: str = None,
+        from_name: str = None,
+        tags: List[str] = None,
+        track_opens: bool = True,
+        track_clicks: bool = True,
+    ) -> Dict:
         """Send bulk email with recipient variables."""
 
         from_address = from_email or f"noreply@{self.domain}"
@@ -127,7 +147,7 @@ class MailgunService:
             url,
             auth=auth,
             params={'address': email},
-            timeout=10
+            timeout=10,
         )
         response.raise_for_status()
         return response.json()
@@ -138,8 +158,12 @@ class MailgunService:
         response = self._make_request('GET', endpoint)
         return response.get('items', [])
 
-    def add_to_suppression(self, email: str, suppression_type: str = 'bounces',
-                          reason: str = None) -> Dict:
+    def add_to_suppression(
+        self,
+        email: str,
+        suppression_type: str = 'bounces',
+        reason: str = None,
+    ) -> Dict:
         """Add email to suppression list."""
         endpoint = f"/{suppression_type}"
         data = {'address': email}
@@ -148,8 +172,11 @@ class MailgunService:
 
         return self._make_request('POST', endpoint, data=data)
 
-    def remove_from_suppression(self, email: str,
-                               suppression_type: str = 'bounces') -> bool:
+    def remove_from_suppression(
+        self,
+        email: str,
+        suppression_type: str = 'bounces',
+    ) -> bool:
         """Remove email from suppression list."""
         endpoint = f"/{suppression_type}/{email}"
         try:
@@ -160,8 +187,12 @@ class MailgunService:
                 return False  # Email not in suppression list
             raise
 
-    def verify_webhook_signature(self, timestamp: str, token: str,
-                                signature: str) -> bool:
+    def verify_webhook_signature(
+        self,
+        timestamp: str,
+        token: str,
+        signature: str,
+    ) -> bool:
         """Verify Mailgun webhook signature."""
         signing_key = settings.MAILGUN_WEBHOOK_SIGNING_KEY
         if not signing_key:
@@ -171,13 +202,18 @@ class MailgunService:
         expected_signature = hmac.new(
             key=signing_key.encode(),
             msg=f'{timestamp}{token}'.encode(),
-            digestmod=hashlib.sha256
+            digestmod=hashlib.sha256,
         ).hexdigest()
 
         return hmac.compare_digest(signature, expected_signature)
 
-    def get_events(self, begin: str = None, end: str = None,
-                   event_type: str = None, limit: int = 300) -> List[Dict]:
+    def get_events(
+        self,
+        begin: str = None,
+        end: str = None,
+        event_type: str = None,
+        limit: int = 300,
+    ) -> List[Dict]:
         """Get email events from Mailgun."""
         params = {'limit': limit}
 
@@ -200,8 +236,13 @@ class MailgunService:
 class OdooService:
     """Service for interacting with Odoo CRM API."""
 
-    def __init__(self, url: str = None, username: str = None,
-                 api_key: str = None, database: str = None):
+    def __init__(
+        self,
+        url: str = None,
+        username: str = None,
+        api_key: str = None,
+        database: str = None,
+    ):
         self.url = (url or settings.ODOO_URL).rstrip('/')
         self.username = username or settings.ODOO_USERNAME
         self.api_key = api_key or settings.ODOO_API_KEY
@@ -238,7 +279,7 @@ class OdooService:
         try:
             return models.execute_kw(
                 self.database, uid, self.api_key,
-                model, method, args, kwargs
+                model, method, args, kwargs,
             )
         except Exception as e:
             logger.error(f"Odoo API error: {e}")
@@ -253,8 +294,11 @@ class OdooService:
 
         return self._make_request('res.partner', 'search', domain, **kwargs)
 
-    def get_contacts(self, contact_ids: List[int] = None,
-                    fields: List[str] = None) -> List[Dict]:
+    def get_contacts(
+        self,
+        contact_ids: List[int] = None,
+        fields: List[str] = None,
+    ) -> List[Dict]:
         """Get contact details from Odoo."""
         if contact_ids is None:
             contact_ids = self.search_contacts()
@@ -262,7 +306,7 @@ class OdooService:
         fields = fields or [
             'name', 'email', 'phone', 'mobile', 'street', 'city',
             'state_id', 'country_id', 'zip', 'category_id', 'is_company',
-            'create_date', 'write_date'
+            'create_date', 'write_date',
         ]
 
         return self._make_request('res.partner', 'read', contact_ids, fields)
@@ -274,12 +318,11 @@ class OdooService:
     def update_contact(self, contact_id: int, update_data: Dict) -> bool:
         """Update existing contact in Odoo."""
         return self._make_request(
-            'res.partner', 'write', [contact_id], update_data
+            'res.partner', 'write', [contact_id], update_data,
         )
 
     def sync_email_engagement(self, contact_id: int, engagement_data: Dict):
         """Update contact with email engagement data."""
-        # This would typically use custom fields in Odoo
         update_data = {
             'x_email_engagement_score': engagement_data.get('engagement_score', 0),
             'x_last_email_opened': engagement_data.get('last_opened'),
@@ -321,7 +364,8 @@ def validate_webhook_signature(request, provider: str) -> bool:
 def process_mailgun_webhook(webhook_data: Dict) -> bool:
     """Process Mailgun webhook data and create email events."""
     from apps.analytics.models import EmailEvent
-    from apps.subscribers.models import Subscriber
+    from apps.subscribers.models import EmailContact
+    from apps.campaigns.models import CampaignRecipient
 
     try:
         event_data = webhook_data.get('event-data', {})
@@ -340,6 +384,8 @@ def process_mailgun_webhook(webhook_data: Dict) -> bool:
             'complained': EmailEvent.EventType.COMPLAINED,
             'bounced': EmailEvent.EventType.BOUNCED,
             'failed': EmailEvent.EventType.FAILED,
+            'dropped': EmailEvent.EventType.FAILED,
+            'rejected': EmailEvent.EventType.FAILED,
         }
 
         mapped_event_type = event_mapping.get(event_type)
@@ -349,17 +395,29 @@ def process_mailgun_webhook(webhook_data: Dict) -> bool:
 
         # Extract common fields
         recipient_email = event_data.get('recipient')
+        message_headers = event_data.get('message', {}).get('headers', {})
+        message_id = message_headers.get('message-id', '')
         timestamp = timezone.datetime.fromtimestamp(
             event_data.get('timestamp', 0), tz=timezone.utc
         )
 
+        # Find recipient and campaign
+        recipient = None
+        try:
+            if message_id:
+                recipient = CampaignRecipient.objects.select_related('campaign', 'contact').get(
+                    mailgun_message_id=message_id,
+                    contact__email=recipient_email,
+                )
+        except CampaignRecipient.DoesNotExist:
+            logger.info(f"Campaign recipient not found for message {message_id}")
+
         # Create email event
-        event = EmailEvent.objects.create(
+        EmailEvent.objects.create(
+            recipient=recipient,
             event_type=mapped_event_type,
             timestamp=timestamp,
-            mailgun_message_id=event_data.get('message', {}).get('headers', {}).get('message-id', ''),
             mailgun_event_id=event_data.get('id', ''),
-            recipient_email=recipient_email,
             url=event_data.get('url', ''),
             user_agent=event_data.get('client-info', {}).get('user-agent', ''),
             ip_address=event_data.get('ip', ''),
@@ -371,19 +429,114 @@ def process_mailgun_webhook(webhook_data: Dict) -> bool:
             city=event_data.get('geolocation', {}).get('city', ''),
             bounce_reason=event_data.get('reason', ''),
             error_message=event_data.get('delivery-status', {}).get('description', ''),
-            raw_data=webhook_data
+            data={
+                'mailgun_event': event_type,
+                'message_id': message_id,
+                'recipient': recipient_email,
+                'tags': event_data.get('tags', []),
+                'campaigns': event_data.get('campaigns', []),
+                'raw_data': webhook_data,
+            },
         )
 
-        # Try to link to subscriber
-        try:
-            subscriber = Subscriber.objects.get(email=recipient_email)
-            event.subscriber = subscriber
-            event.save()
-        except Subscriber.DoesNotExist:
-            logger.info(f"Subscriber not found for email: {recipient_email}")
+        # Update campaign recipient status
+        if recipient:
+            update_recipient_status(recipient, event_type, timestamp)
 
+        # Update contact activity
+        try:
+            contact = EmailContact.objects.get(email=recipient_email)
+            update_contact_activity(contact, event_type, timestamp)
+        except EmailContact.DoesNotExist:
+            logger.info(f"Contact not found for email: {recipient_email}")
+
+        logger.info(f"Processed {event_type} event for {recipient_email}")
         return True
 
     except Exception as e:
         logger.error(f"Error processing webhook: {e}")
         return False
+
+
+def update_recipient_status(recipient, event_type: str, timestamp):
+    """Update campaign recipient status based on email event."""
+    from apps.campaigns.models import CampaignRecipient
+
+    status_mapping = {
+        'delivered': CampaignRecipient.RecipientStatus.DELIVERED,
+        'opened': CampaignRecipient.RecipientStatus.OPENED,
+        'clicked': CampaignRecipient.RecipientStatus.CLICKED,
+        'bounced': CampaignRecipient.RecipientStatus.BOUNCED,
+        'complained': CampaignRecipient.RecipientStatus.COMPLAINED,
+        'unsubscribed': CampaignRecipient.RecipientStatus.UNSUBSCRIBED,
+        'failed': CampaignRecipient.RecipientStatus.FAILED,
+        'dropped': CampaignRecipient.RecipientStatus.FAILED,
+        'rejected': CampaignRecipient.RecipientStatus.FAILED,
+    }
+
+    new_status = status_mapping.get(event_type)
+    if new_status and recipient.status != new_status:
+        recipient.status = new_status
+        recipient.last_activity = timestamp
+
+        # Update specific timestamps
+        if event_type == 'delivered':
+            recipient.delivered_at = timestamp
+        elif event_type == 'opened':
+            recipient.opened_at = timestamp
+            recipient.open_count += 1
+        elif event_type == 'clicked':
+            recipient.clicked_at = timestamp
+            recipient.click_count += 1
+
+        recipient.save()
+
+
+def update_contact_activity(contact, event_type: str, timestamp):
+    """Update contact activity and engagement metrics."""
+    from apps.analytics.models import ContactActivity
+
+    # Create or get today's activity record
+    activity, _ = ContactActivity.objects.get_or_create(
+        contact=contact,
+        date=timestamp.date(),
+        defaults={
+            'emails_received': 0,
+            'emails_opened': 0,
+            'emails_clicked': 0,
+            'unsubscribes': 0,
+            'complaints': 0,
+            'bounces': 0,
+        },
+    )
+
+    # Update activity counters
+    if event_type == 'delivered':
+        activity.emails_received += 1
+    elif event_type == 'opened':
+        activity.emails_opened += 1
+    elif event_type == 'clicked':
+        activity.emails_clicked += 1
+    elif event_type == 'unsubscribed':
+        activity.unsubscribes += 1
+    elif event_type in ['bounced', 'failed', 'dropped', 'rejected']:
+        activity.bounces += 1
+
+    activity.save()
+
+    # Update contact engagement
+    contact.last_email_activity = timestamp
+
+    if event_type in ['opened', 'clicked']:
+        contact.last_engagement = timestamp
+        contact.engagement_score = min(100, contact.engagement_score + 5)
+    elif event_type in ['complained', 'bounced', 'unsubscribed']:
+        contact.engagement_score = max(0, contact.engagement_score - 10)
+        if event_type == 'unsubscribed':
+            contact.is_subscribed = False
+            contact.unsubscribed_at = timestamp
+        elif event_type == 'complained':
+            contact.is_subscribed = False
+            contact.complained_at = timestamp
+
+    contact.save()

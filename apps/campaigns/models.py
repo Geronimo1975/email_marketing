@@ -3,275 +3,366 @@ from django.utils.translation import gettext_lazy as _
 from django.db.models import JSONField
 from django.core.validators import FileExtensionValidator
 from django.utils import timezone
+from django.conf import settings
+import uuid
 
 
 class EmailTemplate(models.Model):
-    """Reusable email templates for campaigns."""
+    """E-Mail Vorlagen für Reinigungsservice Kampagnen"""
 
-    class Type(models.TextChoices):
-        CAMPAIGN = 'campaign', _('Campaign')
-        AUTOMATION = 'automation', _('Automation')
-        TRANSACTIONAL = 'transactional', _('Transactional')
+    class TemplateType(models.TextChoices):
+        WELCOME = 'welcome', 'Willkommen'
+        NEWSLETTER = 'newsletter', 'Newsletter'
+        PROMOTIONAL = 'promotional', 'Werbung'
+        FOLLOW_UP = 'follow_up', 'Nachfass'
+        QUOTE_REQUEST = 'quote', 'Angebot'
+        SERVICE_REMINDER = 'reminder', 'Service Erinnerung'
+        SEASONAL = 'seasonal', 'Saisonal'
 
-    name = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    type = models.CharField(max_length=20, choices=Type.choices, default=Type.CAMPAIGN)
-    team = models.ForeignKey(
-        'accounts.Team',
-        on_delete=models.CASCADE,
-        related_name='email_templates'
-    )
+    class ServiceType(models.TextChoices):
+        OFFICE_CLEANING = 'office', 'Büroreinigung'
+        WINDOW_CLEANING = 'windows', 'Fensterreinigung'
+        DEEP_CLEANING = 'deep', 'Grundreinigung'
+        MAINTENANCE = 'maintenance', 'Unterhaltsreinigung'
+        SPECIAL_CLEANING = 'special', 'Sonderreinigung'
+        ALL_SERVICES = 'all', 'Alle Services'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, verbose_name="Template Name")
+    description = models.TextField(blank=True, verbose_name="Beschreibung")
+    template_type = models.CharField(max_length=20, choices=TemplateType.choices, default=TemplateType.NEWSLETTER, verbose_name="Template Typ")
+    service_type = models.CharField(max_length=20, choices=ServiceType.choices, default=ServiceType.ALL_SERVICES, verbose_name="Service Typ")
 
     # Template content
-    subject = models.CharField(max_length=255)
-    html_content = models.TextField()
-    text_content = models.TextField(blank=True)
+    subject = models.CharField(max_length=255, verbose_name="Betreff")
+    from_name = models.CharField(max_length=100, default="North Cleaning Services", verbose_name="Absender Name")
+    html_content = models.TextField(verbose_name="HTML Inhalt")
+    text_content = models.TextField(blank=True, verbose_name="Text Inhalt")
 
     # Template metadata
-    variables = JSONField(default=list, blank=True)  # List of template variables
+    variables = JSONField(default=list, blank=True, help_text="Template Variablen wie {{first_name}}, {{company_name}}", verbose_name="Variablen")
     thumbnail = models.ImageField(
         upload_to='template_thumbnails/',
         blank=True,
-        validators=[FileExtensionValidator(['png', 'jpg', 'jpeg'])]
+        validators=[FileExtensionValidator(['png', 'jpg', 'jpeg'])],
+        verbose_name="Vorschaubild"
+    )
+    html_file = models.FileField(
+        upload_to='template_files/',
+        blank=True,
+        validators=[FileExtensionValidator(['html'])],
+        verbose_name="HTML Datei"
     )
 
-    is_active = models.BooleanField(default=True)
-    created_by = models.ForeignKey(
-        'accounts.User',
-        on_delete=models.CASCADE,
-        related_name='created_templates'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # Usage tracking
+    times_used = models.PositiveIntegerField(default=0, verbose_name="Verwendungen")
+    avg_open_rate = models.FloatField(default=0.0, verbose_name="Durchschnittliche Öffnungsrate")
+    avg_click_rate = models.FloatField(default=0.0, verbose_name="Durchschnittliche Klickrate")
+
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="Erstellt von")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
 
     class Meta:
-        verbose_name = _('Email Template')
-        verbose_name_plural = _('Email Templates')
-        db_table = 'email_templates'
+        verbose_name = "E-Mail Template"
+        verbose_name_plural = "E-Mail Templates"
         ordering = ['-created_at']
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.get_template_type_display()})"
+
+    def update_stats(self):
+        """Update average rates from campaigns using this template"""
+        campaigns = self.campaigns.filter(status='sent')
+        if campaigns.exists():
+            total_campaigns = campaigns.count()
+            total_open_rate = sum(c.open_rate for c in campaigns)
+            total_click_rate = sum(c.click_rate for c in campaigns)
+
+            self.avg_open_rate = total_open_rate / total_campaigns
+            self.avg_click_rate = total_click_rate / total_campaigns
+            self.save()
 
 
-class Campaign(models.Model):
-    """Email marketing campaigns."""
+class EmailCampaign(models.Model):
+    """E-Mail Marketing Kampagnen für Reinigungsservices"""
 
-    class Status(models.TextChoices):
-        DRAFT = 'draft', _('Draft')
-        SCHEDULED = 'scheduled', _('Scheduled')
-        SENDING = 'sending', _('Sending')
-        SENT = 'sent', _('Sent')
-        PAUSED = 'paused', _('Paused')
-        CANCELLED = 'cancelled', _('Cancelled')
+    class CampaignStatus(models.TextChoices):
+        DRAFT = 'draft', 'Entwurf'
+        SCHEDULED = 'scheduled', 'Geplant'
+        SENDING = 'sending', 'Wird gesendet'
+        SENT = 'sent', 'Gesendet'
+        PAUSED = 'paused', 'Pausiert'
+        CANCELLED = 'cancelled', 'Abgebrochen'
 
-    class Type(models.TextChoices):
-        REGULAR = 'regular', _('Regular')
-        AB_TEST = 'ab_test', _('A/B Test')
-        RSS = 'rss', _('RSS Campaign')
+    class CampaignType(models.TextChoices):
+        REGULAR = 'regular', 'Regulär'
+        AB_TEST = 'ab_test', 'A/B Test'
+        FOLLOW_UP = 'follow_up', 'Nachfass'
+        SEASONAL = 'seasonal', 'Saisonal'
 
-    name = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    type = models.CharField(max_length=20, choices=Type.choices, default=Type.REGULAR)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    class Priority(models.TextChoices):
+        LOW = 'low', 'Niedrig'
+        NORMAL = 'normal', 'Normal'
+        HIGH = 'high', 'Hoch'
+        URGENT = 'urgent', 'Dringend'
 
-    team = models.ForeignKey(
-        'accounts.Team',
-        on_delete=models.CASCADE,
-        related_name='campaigns'
-    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, verbose_name="Kampagnen Name")
+    description = models.TextField(blank=True, verbose_name="Beschreibung")
+    campaign_type = models.CharField(max_length=20, choices=CampaignType.choices, default=CampaignType.REGULAR, verbose_name="Kampagnen Typ")
+    status = models.CharField(max_length=20, choices=CampaignStatus.choices, default=CampaignStatus.DRAFT, verbose_name="Status")
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.NORMAL, verbose_name="Priorität")
 
     # Email content
-    subject = models.CharField(max_length=255)
-    from_email = models.EmailField()
-    from_name = models.CharField(max_length=255)
-    reply_to = models.EmailField(blank=True)
+    subject = models.CharField(max_length=255, verbose_name="Betreff")
+    from_email = models.EmailField(default="noreply@north-cleaning.de", verbose_name="Absender E-Mail")
+    from_name = models.CharField(max_length=255, default="North Cleaning Services", verbose_name="Absender Name")
+    reply_to = models.EmailField(blank=True, verbose_name="Antwort an")
 
     template = models.ForeignKey(
         EmailTemplate,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='campaigns'
+        related_name='campaigns',
+        verbose_name="Template"
     )
-    html_content = models.TextField()
-    text_content = models.TextField(blank=True)
+    html_content = models.TextField(verbose_name="HTML Inhalt")
+    text_content = models.TextField(blank=True, verbose_name="Text Inhalt")
 
-    # Targeting
-    subscriber_lists = models.ManyToManyField(
-        'subscribers.SubscriberList',
-        related_name='campaigns'
+    # Targeting - Hamburg cleaning services specific
+    email_lists = models.ManyToManyField(
+        'subscribers.EmailList',
+        related_name='campaigns',
+        verbose_name="E-Mail Listen"
     )
-    segment_rules = models.ManyToManyField(
-        'subscribers.SegmentRule',
+    target_business_types = models.JSONField(
+        default=list,
         blank=True,
-        related_name='campaigns'
+        verbose_name="Ziel Geschäftstypen",
+        help_text="Liste der Business Types zu targeten"
     )
-    tags = models.ManyToManyField(
-        'subscribers.Tag',
+    target_districts = models.JSONField(
+        default=list,
         blank=True,
-        related_name='campaigns'
+        verbose_name="Ziel Bezirke",
+        help_text="Hamburg Bezirke zu targeten"
     )
 
-    # Scheduling
-    send_at = models.DateTimeField(null=True, blank=True)
-    timezone = models.CharField(max_length=50, default='UTC')
+    # Scheduling (Europe/Berlin timezone)
+    send_at = models.DateTimeField(null=True, blank=True, verbose_name="Senden am")
+    timezone = models.CharField(max_length=50, default='Europe/Berlin', verbose_name="Zeitzone")
 
     # A/B Testing
-    ab_test_percentage = models.IntegerField(default=100)  # Percentage of list to send to
-    ab_winner_criteria = models.CharField(max_length=50, blank=True)  # 'open_rate', 'click_rate'
-    ab_test_duration = models.IntegerField(default=24)  # Hours to wait before sending to remainder
+    ab_test_percentage = models.IntegerField(default=100, verbose_name="A/B Test Prozent")
+    ab_winner_criteria = models.CharField(
+        max_length=50,
+        blank=True,
+        choices=[('open_rate', 'Öffnungsrate'), ('click_rate', 'Klickrate')],
+        verbose_name="A/B Test Gewinner Kriterium"
+    )
+    ab_test_duration = models.IntegerField(default=24, verbose_name="A/B Test Dauer (Stunden)")
 
     # Tracking settings
-    track_opens = models.BooleanField(default=True)
-    track_clicks = models.BooleanField(default=True)
+    track_opens = models.BooleanField(default=True, verbose_name="Öffnungen verfolgen")
+    track_clicks = models.BooleanField(default=True, verbose_name="Klicks verfolgen")
 
     # Statistics (denormalized for performance)
-    total_recipients = models.IntegerField(default=0)
-    emails_sent = models.IntegerField(default=0)
-    emails_delivered = models.IntegerField(default=0)
-    emails_bounced = models.IntegerField(default=0)
-    emails_opened = models.IntegerField(default=0)
-    emails_clicked = models.IntegerField(default=0)
-    unsubscribes = models.IntegerField(default=0)
-    complaints = models.IntegerField(default=0)
+    total_recipients = models.IntegerField(default=0, verbose_name="Empfänger gesamt")
+    emails_sent = models.IntegerField(default=0, verbose_name="E-Mails gesendet")
+    emails_delivered = models.IntegerField(default=0, verbose_name="E-Mails zugestellt")
+    emails_bounced = models.IntegerField(default=0, verbose_name="E-Mails bounced")
+    emails_opened = models.IntegerField(default=0, verbose_name="E-Mails geöffnet")
+    emails_clicked = models.IntegerField(default=0, verbose_name="E-Mails geklickt")
+    unsubscribes = models.IntegerField(default=0, verbose_name="Abmeldungen")
+    complaints = models.IntegerField(default=0, verbose_name="Beschwerden")
 
-    created_by = models.ForeignKey(
-        'accounts.User',
-        on_delete=models.CASCADE,
-        related_name='created_campaigns'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    sent_at = models.DateTimeField(null=True, blank=True)
+    # Business metrics for cleaning services
+    quote_requests = models.IntegerField(default=0, verbose_name="Angebots-Anfragen")
+    phone_calls = models.IntegerField(default=0, verbose_name="Anrufe")
+    website_visits = models.IntegerField(default=0, verbose_name="Website Besuche")
+
+    # Mailgun integration
+    mailgun_campaign_id = models.CharField(max_length=255, blank=True, verbose_name="Mailgun Kampagnen ID")
+
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="Erstellt von")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
+    sent_at = models.DateTimeField(null=True, blank=True, verbose_name="Gesendet am")
 
     class Meta:
-        verbose_name = _('Campaign')
-        verbose_name_plural = _('Campaigns')
-        db_table = 'campaigns'
+        verbose_name = "E-Mail Kampagne"
+        verbose_name_plural = "E-Mail Kampagnen"
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['status']),
             models.Index(fields=['send_at']),
-            models.Index(fields=['type']),
+            models.Index(fields=['campaign_type']),
+            models.Index(fields=['mailgun_campaign_id']),
         ]
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.get_status_display()})"
 
     @property
     def open_rate(self):
         if self.emails_delivered > 0:
-            return (self.emails_opened / self.emails_delivered) * 100
+            return round((self.emails_opened / self.emails_delivered) * 100, 2)
         return 0
 
     @property
     def click_rate(self):
         if self.emails_delivered > 0:
-            return (self.emails_clicked / self.emails_delivered) * 100
+            return round((self.emails_clicked / self.emails_delivered) * 100, 2)
         return 0
 
     @property
     def bounce_rate(self):
         if self.emails_sent > 0:
-            return (self.emails_bounced / self.emails_sent) * 100
+            return round((self.emails_bounced / self.emails_sent) * 100, 2)
+        return 0
+
+    @property
+    def conversion_rate(self):
+        """Quote requests + phone calls as conversion"""
+        if self.emails_delivered > 0:
+            conversions = self.quote_requests + self.phone_calls
+            return round((conversions / self.emails_delivered) * 100, 2)
         return 0
 
     def can_send(self):
-        """Check if campaign can be sent."""
-        return self.status in [self.Status.DRAFT, self.Status.SCHEDULED]
+        """Check if campaign can be sent"""
+        return self.status in [self.CampaignStatus.DRAFT, self.CampaignStatus.SCHEDULED]
 
     def is_scheduled(self):
-        """Check if campaign is scheduled for future sending."""
+        """Check if campaign is scheduled for future sending"""
         return (
-            self.status == self.Status.SCHEDULED and
+            self.status == self.CampaignStatus.SCHEDULED and
             self.send_at and
             self.send_at > timezone.now()
         )
 
+    def get_target_contacts(self):
+        """Get all contacts that match the targeting criteria"""
+        from apps.subscribers.models import EmailContact
+
+        contacts = EmailContact.objects.filter(
+            is_active=True,
+            is_subscribed=True,
+            email_lists__in=self.email_lists.all()
+        ).distinct()
+
+        # Filter by business types if specified
+        if self.target_business_types:
+            contacts = contacts.filter(business_type__in=self.target_business_types)
+
+        # Filter by Hamburg districts if specified
+        if self.target_districts:
+            contacts = contacts.filter(hamburg_district__in=self.target_districts)
+
+        return contacts
+
 
 class CampaignRecipient(models.Model):
-    """Individual recipients of a campaign with delivery tracking."""
+    """Empfänger einer Kampagne mit Zustellungs-Tracking"""
 
-    class Status(models.TextChoices):
-        PENDING = 'pending', _('Pending')
-        SENT = 'sent', _('Sent')
-        DELIVERED = 'delivered', _('Delivered')
-        BOUNCED = 'bounced', _('Bounced')
-        FAILED = 'failed', _('Failed')
+    class RecipientStatus(models.TextChoices):
+        PENDING = 'pending', 'Ausstehend'
+        SENT = 'sent', 'Gesendet'
+        DELIVERED = 'delivered', 'Zugestellt'
+        BOUNCED = 'bounced', 'Bounced'
+        FAILED = 'failed', 'Fehlgeschlagen'
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     campaign = models.ForeignKey(
-        Campaign,
+        EmailCampaign,
         on_delete=models.CASCADE,
-        related_name='recipients'
+        related_name='recipients',
+        verbose_name="Kampagne"
     )
-    subscriber = models.ForeignKey(
-        'subscribers.Subscriber',
+    contact = models.ForeignKey(
+        'subscribers.EmailContact',
         on_delete=models.CASCADE,
-        related_name='campaign_recipients'
+        related_name='campaign_recipients',
+        verbose_name="Kontakt"
     )
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-    mailgun_message_id = models.CharField(max_length=255, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=RecipientStatus.choices,
+        default=RecipientStatus.PENDING,
+        verbose_name="Status"
+    )
+    mailgun_message_id = models.CharField(max_length=255, blank=True, verbose_name="Mailgun Message ID")
 
     # Personalization data
-    personalized_subject = models.CharField(max_length=255, blank=True)
-    personalized_content = models.TextField(blank=True)
+    personalized_subject = models.CharField(max_length=255, blank=True, verbose_name="Personalisierter Betreff")
+    personalized_content = models.TextField(blank=True, verbose_name="Personalisierter Inhalt")
 
     # Delivery tracking
-    sent_at = models.DateTimeField(null=True, blank=True)
-    delivered_at = models.DateTimeField(null=True, blank=True)
-    bounced_at = models.DateTimeField(null=True, blank=True)
-    bounce_reason = models.TextField(blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True, verbose_name="Gesendet am")
+    delivered_at = models.DateTimeField(null=True, blank=True, verbose_name="Zugestellt am")
+    bounced_at = models.DateTimeField(null=True, blank=True, verbose_name="Bounced am")
+    bounce_reason = models.TextField(blank=True, verbose_name="Bounce Grund")
+    error_message = models.TextField(blank=True, verbose_name="Fehlermeldung")
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # Engagement tracking
+    opened_at = models.DateTimeField(null=True, blank=True, verbose_name="Geöffnet am")
+    clicked_at = models.DateTimeField(null=True, blank=True, verbose_name="Geklickt am")
+    unsubscribed_at = models.DateTimeField(null=True, blank=True, verbose_name="Abgemeldet am")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
 
     class Meta:
-        unique_together = ['campaign', 'subscriber']
-        verbose_name = _('Campaign Recipient')
-        verbose_name_plural = _('Campaign Recipients')
-        db_table = 'campaign_recipients'
+        unique_together = ['campaign', 'contact']
+        verbose_name = "Kampagnen Empfänger"
+        verbose_name_plural = "Kampagnen Empfänger"
         indexes = [
             models.Index(fields=['status']),
             models.Index(fields=['mailgun_message_id']),
+            models.Index(fields=['sent_at']),
         ]
 
     def __str__(self):
-        return f'{self.campaign.name} -> {self.subscriber.email}'
+        return f'{self.campaign.name} -> {self.contact.email}'
 
 
 class CampaignVariant(models.Model):
-    """A/B test variants for campaigns."""
+    """A/B Test Varianten für Kampagnen"""
 
     campaign = models.ForeignKey(
-        Campaign,
+        EmailCampaign,
         on_delete=models.CASCADE,
-        related_name='variants'
+        related_name='variants',
+        verbose_name="Kampagne"
     )
-    name = models.CharField(max_length=100)  # e.g., 'Variant A', 'Variant B'
+    name = models.CharField(max_length=100, verbose_name="Varianten Name")
+    description = models.TextField(blank=True, verbose_name="Beschreibung")
 
     # Variant content
-    subject = models.CharField(max_length=255)
-    html_content = models.TextField()
-    text_content = models.TextField(blank=True)
+    subject = models.CharField(max_length=255, verbose_name="Betreff")
+    html_content = models.TextField(verbose_name="HTML Inhalt")
+    text_content = models.TextField(blank=True, verbose_name="Text Inhalt")
 
     # Split testing
-    percentage = models.IntegerField(default=50)  # Percentage of recipients
+    percentage = models.IntegerField(default=50, verbose_name="Prozent der Empfänger")
 
     # Statistics
-    emails_sent = models.IntegerField(default=0)
-    emails_opened = models.IntegerField(default=0)
-    emails_clicked = models.IntegerField(default=0)
+    emails_sent = models.IntegerField(default=0, verbose_name="E-Mails gesendet")
+    emails_opened = models.IntegerField(default=0, verbose_name="E-Mails geöffnet")
+    emails_clicked = models.IntegerField(default=0, verbose_name="E-Mails geklickt")
+    conversions = models.IntegerField(default=0, verbose_name="Konversionen")
 
-    is_winner = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    is_winner = models.BooleanField(default=False, verbose_name="Gewinner")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
 
     class Meta:
         unique_together = ['campaign', 'name']
-        verbose_name = _('Campaign Variant')
-        verbose_name_plural = _('Campaign Variants')
-        db_table = 'campaign_variants'
+        verbose_name = "Kampagnen Variante"
+        verbose_name_plural = "Kampagnen Varianten"
 
     def __str__(self):
         return f'{self.campaign.name} - {self.name}'
@@ -279,11 +370,69 @@ class CampaignVariant(models.Model):
     @property
     def open_rate(self):
         if self.emails_sent > 0:
-            return (self.emails_opened / self.emails_sent) * 100
+            return round((self.emails_opened / self.emails_sent) * 100, 2)
         return 0
 
     @property
     def click_rate(self):
         if self.emails_sent > 0:
-            return (self.emails_clicked / self.emails_sent) * 100
+            return round((self.emails_clicked / self.emails_sent) * 100, 2)
         return 0
+
+    @property
+    def conversion_rate(self):
+        if self.emails_sent > 0:
+            return round((self.conversions / self.emails_sent) * 100, 2)
+        return 0
+
+
+class CampaignSchedule(models.Model):
+    """Zeitplanung für wiederkehrende Kampagnen"""
+
+    class Frequency(models.TextChoices):
+        ONCE = 'once', 'Einmalig'
+        DAILY = 'daily', 'Täglich'
+        WEEKLY = 'weekly', 'Wöchentlich'
+        MONTHLY = 'monthly', 'Monatlich'
+        QUARTERLY = 'quarterly', 'Vierteljährlich'
+
+    campaign = models.OneToOneField(
+        EmailCampaign,
+        on_delete=models.CASCADE,
+        related_name='schedule',
+        verbose_name="Kampagne"
+    )
+    frequency = models.CharField(
+        max_length=20,
+        choices=Frequency.choices,
+        default=Frequency.ONCE,
+        verbose_name="Häufigkeit"
+    )
+    start_date = models.DateTimeField(verbose_name="Start Datum")
+    end_date = models.DateTimeField(null=True, blank=True, verbose_name="End Datum")
+
+    # For weekly/monthly scheduling
+    day_of_week = models.IntegerField(null=True, blank=True, verbose_name="Wochentag")  # 0=Monday, 6=Sunday
+    day_of_month = models.IntegerField(null=True, blank=True, verbose_name="Tag des Monats")
+
+    # For time-based scheduling
+    send_time = models.TimeField(verbose_name="Sendezeit")
+    timezone = models.CharField(max_length=50, default='Europe/Berlin', verbose_name="Zeitzone")
+
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    last_run = models.DateTimeField(null=True, blank=True, verbose_name="Letzte Ausführung")
+    next_run = models.DateTimeField(null=True, blank=True, verbose_name="Nächste Ausführung")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
+
+    class Meta:
+        verbose_name = "Kampagnen Zeitplan"
+        verbose_name_plural = "Kampagnen Zeitpläne"
+
+    def __str__(self):
+        return f"{self.campaign.name} - {self.get_frequency_display()}"
+
+# Backwards-compatibility aliases for tests
+# Tests import `Campaign` and expect related names/types from an older schema.
+Campaign = EmailCampaign
