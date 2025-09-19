@@ -13,7 +13,9 @@ urlpatterns = [
     path('odoo/', views.OdooWebhookView.as_view(), name='odoo_webhook'),
 
     # API endpoints
+    path('', views.IntegrationListCreateView.as_view(), name='integration_list_create'),
     path('sync-odoo/', views.SyncOdooContactsView.as_view(), name='sync_odoo_contacts'),
     path('validate-email/', views.ValidateEmailView.as_view(), name='validate_email'),
     path('suppressions/', views.SuppressionListView.as_view(), name='suppressions'),
+    path('webhooks/', views.IntegrationWebhookCreateView.as_view(), name='webhook_create'),
 ]

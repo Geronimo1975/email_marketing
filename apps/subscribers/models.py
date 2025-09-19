@@ -78,7 +78,6 @@ class EmailContact(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, validators=[EmailValidator()], verbose_name="E-Mail")
-    team = models.ForeignKey('accounts.Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='subscribers', verbose_name="Team")
     first_name = models.CharField(max_length=100, verbose_name="Vorname")
     last_name = models.CharField(max_length=100, verbose_name="Nachname")
     company_name = models.CharField(max_length=255, verbose_name="Firmenname")

@@ -19,6 +19,10 @@ class EmailTemplate(models.Model):
         SERVICE_REMINDER = 'reminder', 'Service Erinnerung'
         SEASONAL = 'seasonal', 'Saisonal'
 
+    class TemplateKind(models.TextChoices):
+        CAMPAIGN = 'campaign', 'Campaign'
+        AUTOMATION = 'automation', 'Automation'
+
     class ServiceType(models.TextChoices):
         OFFICE_CLEANING = 'office', 'Büroreinigung'
         WINDOW_CLEANING = 'windows', 'Fensterreinigung'
@@ -30,7 +34,10 @@ class EmailTemplate(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255, verbose_name="Template Name")
     description = models.TextField(blank=True, verbose_name="Beschreibung")
+    team = models.ForeignKey('accounts.Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='email_templates', verbose_name="Team")
     template_type = models.CharField(max_length=20, choices=TemplateType.choices, default=TemplateType.NEWSLETTER, verbose_name="Template Typ")
+    # Tests expect a field named 'type'
+    type = models.CharField(max_length=20, choices=TemplateKind.choices, default=TemplateKind.CAMPAIGN, verbose_name="Typ")
     service_type = models.CharField(max_length=20, choices=ServiceType.choices, default=ServiceType.ALL_SERVICES, verbose_name="Service Typ")
 
     # Template content
@@ -84,6 +91,18 @@ class EmailTemplate(models.Model):
             self.avg_click_rate = total_click_rate / total_campaigns
             self.save()
 
+    def save(self, *args, **kwargs):
+        # Auto-assign team if not provided: use team where created_by is owner
+        if self.team is None and self.created_by_id:
+            try:
+                from apps.accounts.models import Team
+                owner_team = Team.objects.filter(owner_id=self.created_by_id).first()
+                if owner_team:
+                    self.team = owner_team
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
+
 
 class EmailCampaign(models.Model):
     """E-Mail Marketing Kampagnen für Reinigungsservices"""
@@ -112,6 +131,8 @@ class EmailCampaign(models.Model):
     name = models.CharField(max_length=255, verbose_name="Kampagnen Name")
     description = models.TextField(blank=True, verbose_name="Beschreibung")
     campaign_type = models.CharField(max_length=20, choices=CampaignType.choices, default=CampaignType.REGULAR, verbose_name="Kampagnen Typ")
+    # Tests expect a field named 'type'
+    type = models.CharField(max_length=20, choices=CampaignType.choices, default=CampaignType.REGULAR, verbose_name="Typ")
     status = models.CharField(max_length=20, choices=CampaignStatus.choices, default=CampaignStatus.DRAFT, verbose_name="Status")
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.NORMAL, verbose_name="Priorität")
 

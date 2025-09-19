@@ -257,7 +257,7 @@ class ContactImportAdmin(admin.ModelAdmin):
 
 @admin.register(ContactTag)
 class ContactTagAdmin(admin.ModelAdmin):
-    list_display = ['name', 'color_display', 'contact_count_display', 'created_by', 'created_at']
+    list_display = ['name', 'color_display', 'contact_count_display', 'created_at']
     list_filter = ['created_at']
     search_fields = ['name', 'description']
     readonly_fields = ['contact_count_display', 'created_at']
