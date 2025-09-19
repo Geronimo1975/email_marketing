@@ -1,0 +1,26 @@
+<div class="space-y-6">
+    <div>
+        <h4 class="text-sm font-medium text-gray-900 mb-2">Subject Line</h4>
+        <p class="text-sm text-gray-700">{{ campaign.subject }}</p>
+    </div>
+    <div>
+        <h4 class="text-sm font-medium text-gray-900 mb-2">From</h4>
+        <p class="text-sm text-gray-700">{{ campaign.from_name }} &lt;{{ campaign.from_email }}&gt;</p>
+    </div>
+    <div>
+        <h4 class="text-sm font-medium text-gray-900 mb-2">HTML Content Preview</h4>
+        <div class="border border-gray-300 rounded-md p-4 bg-gray-50 max-h-96 overflow-y-auto">
+            <div class="prose max-w-none">
+                {{ campaign.html_content|safe }}
+            </div>
+        </div>
+    </div>
+    {% if campaign.text_content %}
+    <div>
+        <h4 class="text-sm font-medium text-gray-900 mb-2">Plain Text Content</h4>
+        <div class="border border-gray-300 rounded-md p-4 bg-gray-50 max-h-96 overflow-y-auto">
+            <pre class="text-sm text-gray-700 whitespace-pre-wrap">{{ campaign.text_content }}</pre>
+        </div>
+    </div>
+    {% endif %}
+</div>

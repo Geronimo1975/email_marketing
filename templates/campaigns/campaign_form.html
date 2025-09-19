@@ -1,0 +1,403 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if object %}Edit{% else %}Create{% endif %} Campaign - Email Marketing{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<style>
+    .form-section {
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
+    }
+    .form-section-header {
+        padding: 1.5rem 1.5rem 0 1.5rem;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1.5rem;
+    }
+    .form-section-content {
+        padding: 0 1.5rem 1.5rem 1.5rem;
+    }
+    .editor-container {
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        min-height: 300px;
+    }
+    .tab-button {
+        padding: 0.75rem 1rem;
+        border-bottom: 2px solid transparent;
+        color: #6b7280;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    .tab-button.active {
+        color: #3b82f6;
+        border-bottom-color: #3b82f6;
+    }
+    .tab-button:hover {
+        color: #374151;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">
+                        {% if object %}Edit Campaign{% else %}Create Campaign{% endif %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        {% if object %}Update your campaign settings{% else %}Set up a new email marketing campaign{% endif %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'campaigns:campaign_list' %}"
+                       class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                        Cancel
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <!-- Basic Information -->
+            <div class="form-section">
+                <div class="form-section-header">
+                    <h3 class="text-lg font-medium text-gray-900">Basic Information</h3>
+                    <p class="mt-1 text-sm text-gray-500">Set up the basic details for your campaign</p>
+                </div>
+                <div class="form-section-content">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                Campaign Name *
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.type.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                Campaign Type
+                            </label>
+                            {{ form.type }}
+                            {% if form.type.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.type.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                            Description
+                        </label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <p class="mt-1 text-sm text-red-600">{{ form.description.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Email Content -->
+            <div class="form-section">
+                <div class="form-section-header">
+                    <h3 class="text-lg font-medium text-gray-900">Email Content</h3>
+                    <p class="mt-1 text-sm text-gray-500">Create your email content and subject line</p>
+                </div>
+                <div class="form-section-content">
+                    <div class="space-y-6">
+                        <!-- Subject Line -->
+                        <div>
+                            <label for="{{ form.subject.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                Subject Line *
+                            </label>
+                            {{ form.subject }}
+                            {% if form.subject.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.subject.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- From Information -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="{{ form.from_name.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                    From Name *
+                                </label>
+                                {{ form.from_name }}
+                                {% if form.from_name.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ form.from_name.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <label for="{{ form.from_email.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                    From Email *
+                                </label>
+                                {{ form.from_email }}
+                                {% if form.from_email.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ form.from_email.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Reply To -->
+                        <div>
+                            <label for="{{ form.reply_to.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                Reply To Email
+                            </label>
+                            {{ form.reply_to }}
+                            {% if form.reply_to.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.reply_to.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Content Tabs -->
+                        <div>
+                            <div class="border-b border-gray-200">
+                                <nav class="-mb-px flex space-x-8">
+                                    <button type="button" class="tab-button active" data-tab="html">
+                                        HTML Content *
+                                    </button>
+                                    <button type="button" class="tab-button" data-tab="text">
+                                        Plain Text
+                                    </button>
+                                </nav>
+                            </div>
+                            <div class="mt-4">
+                                <div id="html-tab" class="tab-content">
+                                    <label for="{{ form.html_content.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                                        HTML Content
+                                    </label>
+                                    <div class="editor-container">
+                                        {{ form.html_content }}
+                                    </div>
+                                    {% if form.html_content.errors %}
+                                        <p class="mt-1 text-sm text-red-600">{{ form.html_content.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                                <div id="text-tab" class="tab-content hidden">
+                                    <label for="{{ form.text_content.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Plain Text Content
+                                    </label>
+                                    <div class="editor-container">
+                                        {{ form.text_content }}
+                                    </div>
+                                    {% if form.text_content.errors %}
+                                        <p class="mt-1 text-sm text-red-600">{{ form.text_content.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Targeting -->
+            <div class="form-section">
+                <div class="form-section-header">
+                    <h3 class="text-lg font-medium text-gray-900">Targeting</h3>
+                    <p class="mt-1 text-sm text-gray-500">Select which subscribers will receive this campaign</p>
+                </div>
+                <div class="form-section-content">
+                    <div class="space-y-6">
+                        <!-- Subscriber Lists -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">
+                                Subscriber Lists *
+                            </label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {% for choice in form.subscriber_lists %}
+                                <div class="flex items-center">
+                                    {{ choice.tag }}
+                                    <label for="{{ choice.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                        {{ choice.choice_label }}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% if form.subscriber_lists.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.subscriber_lists.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Tags -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">
+                                Tags
+                            </label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {% for choice in form.tags %}
+                                <div class="flex items-center">
+                                    {{ choice.tag }}
+                                    <label for="{{ choice.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                        {{ choice.choice_label }}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% if form.tags.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.tags.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheduling -->
+            <div class="form-section">
+                <div class="form-section-header">
+                    <h3 class="text-lg font-medium text-gray-900">Scheduling</h3>
+                    <p class="mt-1 text-sm text-gray-500">When should this campaign be sent?</p>
+                </div>
+                <div class="form-section-content">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="{{ form.send_at.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                Send At
+                            </label>
+                            {{ form.send_at }}
+                            <p class="mt-1 text-sm text-gray-500">Leave empty to send immediately</p>
+                            {% if form.send_at.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.send_at.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.timezone.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                Timezone
+                            </label>
+                            {{ form.timezone }}
+                            {% if form.timezone.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.timezone.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- A/B Testing -->
+            <div class="form-section" id="ab-testing-section" style="display: none;">
+                <div class="form-section-header">
+                    <h3 class="text-lg font-medium text-gray-900">A/B Testing</h3>
+                    <p class="mt-1 text-sm text-gray-500">Test different versions of your campaign</p>
+                </div>
+                <div class="form-section-content">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label for="{{ form.ab_test_percentage.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                Test Percentage
+                            </label>
+                            {{ form.ab_test_percentage }}
+                            <p class="mt-1 text-sm text-gray-500">Percentage of list to test</p>
+                            {% if form.ab_test_percentage.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.ab_test_percentage.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.ab_winner_criteria.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                Winner Criteria
+                            </label>
+                            {{ form.ab_winner_criteria }}
+                            {% if form.ab_winner_criteria.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.ab_winner_criteria.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.ab_test_duration.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                Test Duration (hours)
+                            </label>
+                            {{ form.ab_test_duration }}
+                            <p class="mt-1 text-sm text-gray-500">Hours to wait before sending winner</p>
+                            {% if form.ab_test_duration.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.ab_test_duration.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tracking Settings -->
+            <div class="form-section">
+                <div class="form-section-header">
+                    <h3 class="text-lg font-medium text-gray-900">Tracking Settings</h3>
+                    <p class="mt-1 text-sm text-gray-500">Configure what to track for this campaign</p>
+                </div>
+                <div class="form-section-content">
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            {{ form.track_opens }}
+                            <label for="{{ form.track_opens.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Track email opens
+                            </label>
+                        </div>
+                        <div class="flex items-center">
+                            {{ form.track_clicks }}
+                            <label for="{{ form.track_clicks.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Track link clicks
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex justify-end space-x-3 pt-6">
+                <a href="{% url 'campaigns:campaign_list' %}"
+                   class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                    {% if object %}Update Campaign{% else %}Create Campaign{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Tab switching
+document.addEventListener('DOMContentLoaded', function() {
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+
+            // Remove active class from all buttons and contents
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.add('hidden'));
+
+            // Add active class to clicked button and show corresponding content
+            this.classList.add('active');
+            document.getElementById(targetTab + '-tab').classList.remove('hidden');
+        });
+    });
+
+    // A/B Testing section toggle
+    const campaignTypeSelect = document.getElementById('{{ form.type.id_for_label }}');
+    const abTestingSection = document.getElementById('ab-testing-section');
+
+    function toggleABTesting() {
+        if (campaignTypeSelect.value === 'ab_test') {
+            abTestingSection.style.display = 'block';
+        } else {
+            abTestingSection.style.display = 'none';
+        }
+    }
+
+    campaignTypeSelect.addEventListener('change', toggleABTesting);
+    toggleABTesting(); // Initial call
+});
+</script>
+{% endblock %}

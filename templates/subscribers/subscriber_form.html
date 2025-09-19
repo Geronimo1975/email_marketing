@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}
+    {% if object %}Edit Subscriber{% else %}Add Subscriber{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/subscribers.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                {% if object %}Edit Subscriber{% else %}Add New Subscriber{% endif %}
+            </h1>
+            <p class="text-muted">
+                {% if object %}Update subscriber information{% else %}Add a new subscriber to your lists{% endif %}
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'subscribers:subscriber_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Main Form -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Subscriber Information</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="subscriberForm">
+                        {% csrf_token %}
+
+                        <!-- Basic Information -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="text-muted mb-3">Basic Information</h6>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.email.id_for_label }}" class="form-label">
+                                        Email Address <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.email }}
+                                    {% if form.email.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.email.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name</label>
+                                    {{ form.first_name }}
+                                    {% if form.first_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.first_name.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name</label>
+                                    {{ form.last_name }}
+                                    {% if form.last_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.last_name.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.status.id_for_label }}" class="form-label">Status</label>
+                                    {{ form.status }}
+                                    {% if form.status.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.status.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        {{ form.gdpr_consent }}
+                                        <label class="form-check-label" for="{{ form.gdpr_consent.id_for_label }}">
+                                            GDPR Consent
+                                        </label>
+                                    </div>
+                                    {% if form.gdpr_consent.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.gdpr_consent.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lists and Tags -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6 class="text-muted mb-3">Subscriber Lists</h6>
+                                <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                    {% for choice in form.lists %}
+                                        <div class="form-check">
+                                            {{ choice.tag }}
+                                            <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                                {{ choice.choice_label }}
+                                            </label>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                {% if form.lists.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.lists.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-muted mb-3">Tags</h6>
+                                <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                    {% for choice in form.tags %}
+                                        <div class="form-check">
+                                            {{ choice.tag }}
+                                            <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                                {{ choice.choice_label }}
+                                            </label>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                {% if form.tags.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.tags.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Custom Fields -->
+                        <div class="mb-4">
+                            <h6 class="text-muted mb-3">Custom Fields</h6>
+                            <div class="mb-3">
+                                <label for="{{ form.custom_fields.id_for_label }}" class="form-label">
+                                    JSON Data
+                                </label>
+                                {{ form.custom_fields }}
+                                <div class="form-text">
+                                    Enter custom fields as JSON. Example: {"company": "Example Corp", "position": "Manager"}
+                                </div>
+                                {% if form.custom_fields.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.custom_fields.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>
+                                {% if object %}Update Subscriber{% else %}Create Subscriber{% endif %}
+                            </button>
+                            <a href="{% url 'subscribers:subscriber_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Help Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Help & Tips</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Required Fields</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>Email Address</li>
+                    </ul>
+
+                    <h6 class="mt-3">Optional Fields</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-info text-info me-2"></i>First & Last Name</li>
+                        <li><i class="fas fa-info text-info me-2"></i>Subscriber Lists</li>
+                        <li><i class="fas fa-info text-info me-2"></i>Tags</li>
+                        <li><i class="fas fa-info text-info me-2"></i>Custom Fields</li>
+                    </ul>
+
+                    <h6 class="mt-3">Status Options</h6>
+                    <ul class="list-unstyled">
+                        <li><span class="badge bg-success me-2">Subscribed</span> Will receive emails</li>
+                        <li><span class="badge bg-warning me-2">Unsubscribed</span> Won't receive emails</li>
+                        <li><span class="badge bg-danger me-2">Bounced</span> Email bounced back</li>
+                    </ul>
+
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Tip:</strong> You can add subscribers to multiple lists and assign multiple tags for better organization.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            {% if object %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'subscribers:subscriber_detail' object.id %}" class="btn btn-outline-info">
+                            <i class="fas fa-info-circle me-2"></i>View Details
+                        </a>
+                        {% if object.status == 'subscribed' %}
+                            <button class="btn btn-outline-warning" onclick="changeStatus('unsubscribed')">
+                                <i class="fas fa-user-times me-2"></i>Unsubscribe
+                            </button>
+                        {% elif object.status == 'unsubscribed' %}
+                            <button class="btn btn-outline-success" onclick="changeStatus('subscribed')">
+                                <i class="fas fa-user-check me-2"></i>Subscribe
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Form validation
+document.getElementById('subscriberForm').addEventListener('submit', function(e) {
+    const emailField = document.getElementById('{{ form.email.id_for_label }}');
+    const email = emailField.value.trim();
+
+    if (!email) {
+        e.preventDefault();
+        emailField.classList.add('is-invalid');
+        showAlert('error', 'Email address is required');
+        return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        e.preventDefault();
+        emailField.classList.add('is-invalid');
+        showAlert('error', 'Please enter a valid email address');
+        return;
+    }
+
+    // JSON validation for custom fields
+    const customFieldsField = document.getElementById('{{ form.custom_fields.id_for_label }}');
+    const customFields = customFieldsField.value.trim();
+
+    if (customFields) {
+        try {
+            JSON.parse(customFields);
+        } catch (error) {
+            e.preventDefault();
+            customFieldsField.classList.add('is-invalid');
+            showAlert('error', 'Custom fields must be valid JSON');
+            return;
+        }
+    }
+});
+
+// Change status function
+function changeStatus(newStatus) {
+    if (confirm(`Are you sure you want to ${newStatus} this subscriber?`)) {
+        const form = document.getElementById('subscriberForm');
+        const statusField = document.getElementById('{{ form.status.id_for_label }}');
+        statusField.value = newStatus;
+        form.submit();
+    }
+}
+
+// Show alert
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.querySelector('.container-fluid').insertBefore(alertDiv, document.querySelector('.container-fluid').firstChild);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Real-time email validation
+document.getElementById('{{ form.email.id_for_label }}').addEventListener('blur', function() {
+    const email = this.value.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (email && !emailRegex.test(email)) {
+        this.classList.add('is-invalid');
+    } else {
+        this.classList.remove('is-invalid');
+    }
+});
+
+// Real-time JSON validation
+document.getElementById('{{ form.custom_fields.id_for_label }}').addEventListener('blur', function() {
+    const customFields = this.value.trim();
+
+    if (customFields) {
+        try {
+            JSON.parse(customFields);
+            this.classList.remove('is-invalid');
+        } catch (error) {
+            this.classList.add('is-invalid');
+        }
+    } else {
+        this.classList.remove('is-invalid');
+    }
+});
+</script>
+{% endblock %}

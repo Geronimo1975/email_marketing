@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ subscriber.email }} - Subscriber Details{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/subscribers.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">{{ subscriber.full_name|default:subscriber.email }}</h1>
+            <p class="text-muted">{{ subscriber.email }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'subscribers:subscriber_edit' subscriber.id %}" class="btn btn-warning">
+                <i class="fas fa-edit me-2"></i>Edit
+            </a>
+            <a href="{% url 'subscribers:subscriber_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Subscriber Information -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Subscriber Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Basic Information</h6>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td class="fw-bold">Email:</td>
+                                    <td>{{ subscriber.email }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">First Name:</td>
+                                    <td>{{ subscriber.first_name|default:"Not provided" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Last Name:</td>
+                                    <td>{{ subscriber.last_name|default:"Not provided" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Status:</td>
+                                    <td>
+                                        {% if subscriber.status == 'subscribed' %}
+                                            <span class="badge bg-success">Subscribed</span>
+                                        {% elif subscriber.status == 'unsubscribed' %}
+                                            <span class="badge bg-warning">Unsubscribed</span>
+                                        {% elif subscriber.status == 'bounced' %}
+                                            <span class="badge bg-danger">Bounced</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ subscriber.get_status_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Joined:</td>
+                                    <td>{{ subscriber.created_at|date:"M d, Y H:i" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Last Updated:</td>
+                                    <td>{{ subscriber.updated_at|date:"M d, Y H:i" }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Engagement Metrics</h6>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>Engagement Score</span>
+                                    <span class="fw-bold">{{ engagement_score }}%</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar" role="progressbar"
+                                         style="width: {{ engagement_score }}%"
+                                         aria-valuenow="{{ engagement_score }}"
+                                         aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <span>Last Activity:</span>
+                                    <span>
+                                        {% if subscriber.last_activity %}
+                                            {{ subscriber.last_activity|timesince }} ago
+                                        {% else %}
+                                            Never
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                            {% if subscriber.gdpr_consent %}
+                            <div class="alert alert-info py-2">
+                                <i class="fas fa-shield-alt me-2"></i>
+                                <small>GDPR Consent: {{ subscriber.gdpr_consent_date|date:"M d, Y" }}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lists and Tags -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Subscriber Lists</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if subscriber.lists.all %}
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% for list in subscriber.lists.all %}
+                                        <span class="badge bg-primary">{{ list.name }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="text-muted mb-0">Not assigned to any lists</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Tags</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if subscriber.tags.all %}
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% for tag in subscriber.tags.all %}
+                                        <span class="badge" style="background-color: {{ tag.color }}; color: white;">{{ tag.name }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="text-muted mb-0">No tags assigned</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Fields -->
+            {% if subscriber.custom_fields %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Custom Fields</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for key, value in subscriber.custom_fields.items %}
+                                <tr>
+                                    <td class="fw-bold">{{ key|title }}</td>
+                                    <td>{{ value }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Recent Activity -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Recent Activity</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_activity %}
+                        <div class="timeline">
+                            {% for activity in recent_activity %}
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-{{ activity.event_type|lower }}"></div>
+                                <div class="timeline-content">
+                                    <h6 class="timeline-title">{{ activity.get_event_type_display }}</h6>
+                                    <p class="timeline-text">
+                                        {% if activity.campaign %}
+                                            Campaign: {{ activity.campaign.name }}
+                                        {% endif %}
+                                        {% if activity.url %}
+                                            <br>URL: {{ activity.url }}
+                                        {% endif %}
+                                    </p>
+                                    <small class="text-muted">{{ activity.timestamp|timesince }} ago</small>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">No recent activity</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Campaign History -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Campaign History</h5>
+                </div>
+                <div class="card-body">
+                    {% if campaign_history %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Campaign</th>
+                                        <th>Status</th>
+                                        <th>Sent</th>
+                                        <th>Opened</th>
+                                        <th>Clicked</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for recipient in campaign_history %}
+                                    <tr>
+                                        <td>
+                                            <a href="{% url 'campaigns:campaign_detail' recipient.campaign.id %}">
+                                                {{ recipient.campaign.name }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            {% if recipient.status == 'sent' %}
+                                                <span class="badge bg-success">Sent</span>
+                                            {% elif recipient.status == 'opened' %}
+                                                <span class="badge bg-info">Opened</span>
+                                            {% elif recipient.status == 'clicked' %}
+                                                <span class="badge bg-primary">Clicked</span>
+                                            {% elif recipient.status == 'bounced' %}
+                                                <span class="badge bg-danger">Bounced</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ recipient.get_status_display }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ recipient.sent_at|date:"M d, Y" }}</td>
+                                        <td>
+                                            {% if recipient.delivered_at %}
+                                                {{ recipient.delivered_at|date:"M d, Y" }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if recipient.clicked_at %}
+                                                {{ recipient.clicked_at|date:"M d, Y" }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">No campaign history</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Quick Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'subscribers:subscriber_edit' subscriber.id %}" class="btn btn-warning">
+                            <i class="fas fa-edit me-2"></i>Edit Subscriber
+                        </a>
+                        {% if subscriber.status == 'subscribed' %}
+                            <button class="btn btn-outline-warning" onclick="changeStatus('unsubscribed')">
+                                <i class="fas fa-user-times me-2"></i>Unsubscribe
+                            </button>
+                        {% elif subscriber.status == 'unsubscribed' %}
+                            <button class="btn btn-outline-success" onclick="changeStatus('subscribed')">
+                                <i class="fas fa-user-check me-2"></i>Subscribe
+                            </button>
+                        {% endif %}
+                        <button class="btn btn-outline-danger" onclick="deleteSubscriber()">
+                            <i class="fas fa-trash me-2"></i>Delete Subscriber
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h4 class="text-primary">{{ campaign_history|length }}</h4>
+                            <small class="text-muted">Campaigns</small>
+                        </div>
+                        <div class="col-6">
+                            <h4 class="text-success">{{ engagement_score }}%</h4>
+                            <small class="text-muted">Engagement</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Team Information -->
+            {% if subscriber.team %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Team Information</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>Team:</strong> {{ subscriber.team.name }}</p>
+                    <p class="mb-0"><strong>Created by:</strong> {{ subscriber.created_by.email }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function changeStatus(newStatus) {
+    const action = newStatus === 'subscribed' ? 'subscribe' : 'unsubscribe';
+    const message = `Are you sure you want to ${action} this subscriber?`;
+
+    if (confirm(message)) {
+        fetch(`{% url 'subscribers:subscriber_detail_api' subscriber.id %}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                status: newStatus
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to update status'));
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+}
+
+function deleteSubscriber() {
+    if (confirm('Are you sure you want to delete this subscriber? This action cannot be undone.')) {
+        fetch(`{% url 'subscribers:subscriber_detail_api' subscriber.id %}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                window.location.href = '{% url "subscribers:subscriber_list" %}';
+            } else {
+                response.json().then(data => {
+                    alert('Error: ' + (data.error || 'Failed to delete subscriber'));
+                });
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+}
+</script>
+
+<style>
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -35px;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.timeline-marker.bg-opened {
+    background-color: #28a745 !important;
+}
+
+.timeline-marker.bg-clicked {
+    background-color: #007bff !important;
+}
+
+.timeline-marker.bg-bounced {
+    background-color: #dc3545 !important;
+}
+
+.timeline-marker.bg-delivered {
+    background-color: #17a2b8 !important;
+}
+
+.timeline-content {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    border-left: 3px solid #dee2e6;
+}
+
+.timeline-title {
+    margin-bottom: 5px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.timeline-text {
+    margin-bottom: 5px;
+    font-size: 13px;
+    color: #6c757d;
+}
+</style>
+{% endblock %}

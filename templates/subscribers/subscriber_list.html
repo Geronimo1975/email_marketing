@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Subscribers{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/subscribers.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">Subscribers</h1>
+            <p class="text-muted">Manage your subscriber lists and contacts</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'subscribers:subscriber_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Add Subscriber
+            </a>
+            <a href="{% url 'subscribers:subscriber_list_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-list me-2"></i>Manage Lists
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ stats.total_subscribers }}</h4>
+                            <p class="card-text">Total Subscribers</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-users fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ stats.active_subscribers }}</h4>
+                            <p class="card-text">Active</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-user-check fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ stats.new_this_month }}</h4>
+                            <p class="card-text">New This Month</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-user-plus fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ stats.engagement_score_avg }}%</h4>
+                            <p class="card-text">Avg Engagement</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-chart-line fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters and Search -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" hx-get="{% url 'subscribers:subscriber_list_htmx' %}" hx-target="#subscriber-list" hx-trigger="submit">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Search</label>
+                        <input type="text" class="form-control" id="search" name="search"
+                               value="{{ request.GET.search }}" placeholder="Search by name or email...">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="">All Statuses</option>
+                            {% for value, label in filter_form.status.field.choices %}
+                                <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="list" class="form-label">List</label>
+                        <select class="form-select" id="list" name="list">
+                            <option value="">All Lists</option>
+                            {% for list in filter_form.list_id.field.queryset %}
+                                <option value="{{ list.id }}" {% if request.GET.list == list.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ list.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="date_from" class="form-label">From Date</label>
+                        <input type="date" class="form-control" id="date_from" name="date_from"
+                               value="{{ request.GET.date_from }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="date_to" class="form-label">To Date</label>
+                        <input type="date" class="form-control" id="date_to" name="date_to"
+                               value="{{ request.GET.date_to }}">
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="fas fa-search me-2"></i>Filter
+                        </button>
+                        <a href="{% url 'subscribers:subscriber_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Clear
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Subscriber List -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Subscribers</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-primary" onclick="selectAll()">
+                    <i class="fas fa-check-square me-1"></i>Select All
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="bulkAction('delete')" disabled id="bulk-delete">
+                    <i class="fas fa-trash me-1"></i>Delete Selected
+                </button>
+                <button class="btn btn-sm btn-outline-success" onclick="bulkAction('subscribe')" disabled id="bulk-subscribe">
+                    <i class="fas fa-user-check me-1"></i>Subscribe
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="bulkAction('unsubscribe')" disabled id="bulk-unsubscribe">
+                    <i class="fas fa-user-times me-1"></i>Unsubscribe
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div id="subscriber-list">
+                {% include 'subscribers/partials/subscriber_list.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Action Modal -->
+<div class="modal fade" id="bulkActionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Bulk Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="bulkActionForm">
+                    <input type="hidden" id="bulkAction" name="action">
+                    <input type="hidden" id="bulkSubscriberIds" name="subscriber_ids">
+
+                    <div id="bulkActionContent">
+                        <!-- Dynamic content based on action -->
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="executeBulkAction()">Execute</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// HTMX configuration
+document.body.addEventListener('htmx:configRequest', function(evt) {
+    evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+});
+
+// Select all functionality
+function selectAll() {
+    const checkboxes = document.querySelectorAll('input[name="subscriber_ids"]');
+    const selectAllBtn = document.querySelector('button[onclick="selectAll()"]');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+    checkboxes.forEach(cb => cb.checked = !allChecked);
+    selectAllBtn.innerHTML = allChecked ?
+        '<i class="fas fa-check-square me-1"></i>Select All' :
+        '<i class="fas fa-square me-1"></i>Deselect All';
+
+    updateBulkButtons();
+}
+
+// Update bulk action buttons
+function updateBulkButtons() {
+    const checkedBoxes = document.querySelectorAll('input[name="subscriber_ids"]:checked');
+    const hasSelection = checkedBoxes.length > 0;
+
+    document.getElementById('bulk-delete').disabled = !hasSelection;
+    document.getElementById('bulk-subscribe').disabled = !hasSelection;
+    document.getElementById('bulk-unsubscribe').disabled = !hasSelection;
+}
+
+// Bulk action
+function bulkAction(action) {
+    const checkedBoxes = document.querySelectorAll('input[name="subscriber_ids"]:checked');
+    const subscriberIds = Array.from(checkedBoxes).map(cb => cb.value);
+
+    if (subscriberIds.length === 0) {
+        alert('Please select at least one subscriber');
+        return;
+    }
+
+    document.getElementById('bulkAction').value = action;
+    document.getElementById('bulkSubscriberIds').value = JSON.stringify(subscriberIds);
+
+    // Update modal content based on action
+    const content = document.getElementById('bulkActionContent');
+    switch(action) {
+        case 'delete':
+            content.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Are you sure you want to delete ${subscriberIds.length} subscriber(s)? This action cannot be undone.
+                </div>
+            `;
+            break;
+        case 'subscribe':
+            content.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    This will subscribe ${subscriberIds.length} subscriber(s) to receive emails.
+                </div>
+            `;
+            break;
+        case 'unsubscribe':
+            content.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    This will unsubscribe ${subscriberIds.length} subscriber(s) from receiving emails.
+                </div>
+            `;
+            break;
+    }
+
+    new bootstrap.Modal(document.getElementById('bulkActionModal')).show();
+}
+
+// Execute bulk action
+function executeBulkAction() {
+    const form = document.getElementById('bulkActionForm');
+    const formData = new FormData(form);
+
+    fetch('{% url "subscribers:bulk_update_subscribers" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            // Reload the subscriber list
+            htmx.trigger('#subscriber-list', 'htmx:trigger');
+            bootstrap.Modal.getInstance(document.getElementById('bulkActionModal')).hide();
+            showAlert('success', data.message);
+        } else {
+            showAlert('error', data.error || 'An error occurred');
+        }
+    })
+    .catch(error => {
+        showAlert('error', 'An error occurred: ' + error.message);
+    });
+}
+
+// Show alert
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.querySelector('.container-fluid').insertBefore(alertDiv, document.querySelector('.container-fluid').firstChild);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listeners to checkboxes
+    document.addEventListener('change', function(e) {
+        if (e.target.name === 'subscriber_ids') {
+            updateBulkButtons();
+        }
+    });
+});
+</script>
+{% endblock %}

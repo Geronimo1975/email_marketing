@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/analytics.css' %}" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">Analytics Dashboard</h1>
+            <p class="text-muted">Comprehensive email marketing analytics and insights</p>
+        </div>
+        <div class="d-flex gap-2">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="fas fa-download me-2"></i>Export
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="#" onclick="exportData('csv', 'dashboard')">Export as CSV</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="exportData('xlsx', 'dashboard')">Export as Excel</a></li>
+                </ul>
+            </div>
+            <button class="btn btn-primary" onclick="refreshDashboard()">
+                <i class="fas fa-sync-alt me-2"></i>Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Date Range Filter -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" hx-get="{% url 'analytics:dashboard_htmx' %}" hx-target="#dashboard-content" hx-trigger="submit">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="date_from" class="form-label">From Date</label>
+                        <input type="date" class="form-control" id="date_from" name="date_from"
+                               value="{{ date_from|date:'Y-m-d' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="date_to" class="form-label">To Date</label>
+                        <input type="date" class="form-control" id="date_to" name="date_to"
+                               value="{{ date_to|date:'Y-m-d' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-filter me-2"></i>Apply Filter
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <a href="{% url 'analytics:dashboard' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Clear
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div id="dashboard-content">
+        <!-- Key Metrics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title">{{ stats.total_campaigns }}</h4>
+                                <p class="card-text">Total Campaigns</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-bullhorn fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title">{{ stats.total_emails_sent|floatformat:0 }}</h4>
+                                <p class="card-text">Emails Sent</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-paper-plane fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title">{{ stats.open_rate }}%</h4>
+                                <p class="card-text">Open Rate</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-eye fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title">{{ stats.click_rate }}%</h4>
+                                <p class="card-text">Click Rate</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-mouse-pointer fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Email Performance</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <h3 class="text-success">{{ stats.delivery_rate }}%</h3>
+                                <small class="text-muted">Delivery Rate</small>
+                            </div>
+                            <div class="col-6">
+                                <h3 class="text-danger">{{ stats.bounce_rate }}%</h3>
+                                <small class="text-muted">Bounce Rate</small>
+                            </div>
+                        </div>
+                        <div class="row text-center mt-3">
+                            <div class="col-6">
+                                <h3 class="text-primary">{{ stats.total_emails_delivered|floatformat:0 }}</h3>
+                                <small class="text-muted">Delivered</small>
+                            </div>
+                            <div class="col-6">
+                                <h3 class="text-warning">{{ stats.total_emails_bounced|floatformat:0 }}</h3>
+                                <small class="text-muted">Bounced</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Subscriber Metrics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <h3 class="text-info">{{ stats.total_subscribers|floatformat:0 }}</h3>
+                                <small class="text-muted">Total Subscribers</small>
+                            </div>
+                            <div class="col-6">
+                                <h3 class="text-success">{{ stats.subscriber_growth }}%</h3>
+                                <small class="text-muted">Growth Rate</small>
+                            </div>
+                        </div>
+                        <div class="row text-center mt-3">
+                            <div class="col-6">
+                                <h3 class="text-primary">{{ stats.total_emails_opened|floatformat:0 }}</h3>
+                                <small class="text-muted">Total Opens</small>
+                            </div>
+                            <div class="col-6">
+                                <h3 class="text-warning">{{ stats.total_emails_clicked|floatformat:0 }}</h3>
+                                <small class="text-muted">Total Clicks</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Engagement Timeline</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="engagementChart" height="100"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Device Breakdown</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="deviceChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Campaigns and Links -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Top Performing Campaigns</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if top_campaigns %}
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Campaign</th>
+                                            <th>Open Rate</th>
+                                            <th>Click Rate</th>
+                                            <th>Score</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for campaign in top_campaigns %}
+                                        <tr>
+                                            <td>
+                                                <div>
+                                                    <strong>{{ campaign.campaign_name }}</strong>
+                                                    <br><small class="text-muted">{{ campaign.subject }}</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-info">{{ campaign.open_rate }}%</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-warning">{{ campaign.click_rate }}%</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-success">{{ campaign.engagement_score }}</span>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-muted mb-0">No campaign data available</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Top Countries</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if location_breakdown.countries %}
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Country</th>
+                                            <th>Events</th>
+                                            <th>%</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for country in location_breakdown.countries %}
+                                        <tr>
+                                            <td>{{ country.country|default:"Unknown" }}</td>
+                                            <td>{{ country.count }}</td>
+                                            <td>
+                                                <div class="progress" style="height: 8px;">
+                                                    <div class="progress-bar" role="progressbar"
+                                                         style="width: {{ country.count|floatformat:0 }}%">
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-muted mb-0">No location data available</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Quick Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <a href="{% url 'campaigns:campaign_list' %}" class="btn btn-outline-primary w-100">
+                                    <i class="fas fa-bullhorn me-2"></i>View Campaigns
+                                </a>
+                            </div>
+                            <div class="col-md-3">
+                                <a href="{% url 'subscribers:subscriber_list' %}" class="btn btn-outline-success w-100">
+                                    <i class="fas fa-users me-2"></i>View Subscribers
+                                </a>
+                            </div>
+                            <div class="col-md-3">
+                                <a href="{% url 'analytics:email_events' %}" class="btn btn-outline-info w-100">
+                                    <i class="fas fa-list me-2"></i>View Events
+                                </a>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-warning w-100" onclick="exportData('csv', 'dashboard')">
+                                    <i class="fas fa-download me-2"></i>Export Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Chart.js configuration
+const engagementData = {{ engagement_timeline|safe }};
+const deviceData = {{ device_breakdown|safe }};
+
+// Engagement Timeline Chart
+const engagementCtx = document.getElementById('engagementChart').getContext('2d');
+new Chart(engagementCtx, {
+    type: 'line',
+    data: {
+        labels: engagementData.map(item => item.date),
+        datasets: [{
+            label: 'Opens',
+            data: engagementData.map(item => item.opens),
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1
+        }, {
+            label: 'Clicks',
+            data: engagementData.map(item => item.clicks),
+            borderColor: 'rgb(255, 99, 132)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            tension: 0.1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+// Device Breakdown Chart
+const deviceCtx = document.getElementById('deviceChart').getContext('2d');
+new Chart(deviceCtx, {
+    type: 'doughnut',
+    data: {
+        labels: deviceData.map(item => item.device_type),
+        datasets: [{
+            data: deviceData.map(item => item.count),
+            backgroundColor: [
+                'rgb(255, 99, 132)',
+                'rgb(54, 162, 235)',
+                'rgb(255, 205, 86)',
+                'rgb(75, 192, 192)',
+                'rgb(153, 102, 255)'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+
+// Export data function
+function exportData(format, dataType) {
+    const dateFrom = document.getElementById('date_from').value;
+    const dateTo = document.getElementById('date_to').value;
+
+    const url = `{% url 'analytics:export_analytics' %}?format=${format}&data_type=${dataType}&date_from=${dateFrom}&date_to=${dateTo}`;
+    window.open(url, '_blank');
+}
+
+// Refresh dashboard
+function refreshDashboard() {
+    htmx.trigger('#dashboard-content', 'htmx:trigger');
+}
+
+// HTMX configuration
+document.body.addEventListener('htmx:configRequest', function(evt) {
+    evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+});
+
+// Auto-refresh every 5 minutes
+setInterval(function() {
+    htmx.trigger('#dashboard-content', 'htmx:trigger');
+}, 300000);
+</script>
+{% endblock %}
